@@ -1,6 +1,10 @@
 package index
 
-import "fmt"
+import (
+	"fmt"
+
+	"github.com/vmihailenco/msgpack/v5"
+)
 
 type Index interface {
 	// Get retrieves the value associated with the given key.
@@ -46,12 +50,10 @@ func (t *PrefixTrie) Close() error {
 	// No resources to release in this implementation
 	return nil
 }
-
 func (t *PrefixTrie) Get(key string) (*IndexValue, error) {
 	node := t.Root
 	for _, char := range key {
 		if _, exists := node.Children[char]; !exists {
-
 			return nil, fmt.Errorf("key not found")
 		}
 		node = node.Children[char]
@@ -151,13 +153,22 @@ func (t *PrefixTrie) Iterate() (<-chan map[string]*IndexValue, error) {
 }
 
 func (t *PrefixTrie) Encode() ([]byte, error) {
-	// Implement serialization logic here
-	return nil, nil // Placeholder
+	// Serialize using MessagePack
+	data, err := msgpack.Marshal(t.Root)
+	if err != nil {
+		return nil, fmt.Errorf("failed to encode trie: %v", err)
+	}
+	return data, nil
 }
 
 func (t *PrefixTrie) Decode(data []byte) error {
 	// Implement deserialization logic here
-	return nil // Placeholder
+	var root PrefixTrieNode
+	if err := msgpack.Unmarshal(data, &root); err != nil {
+		return fmt.Errorf("failed to decode trie: %v", err)
+	}
+	t.Root = &root
+	return nil
 }
 
 func (t *PrefixTrie) Clear() error {
