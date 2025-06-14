@@ -2,6 +2,7 @@ package index
 
 import (
 	"fmt"
+	"sync"
 
 	"github.com/vmihailenco/msgpack/v5"
 )
@@ -40,6 +41,7 @@ type PrefixTrieNode struct {
 	Children map[rune]*PrefixTrieNode `json:"children"`
 	IsEnd    bool                     `json:"is_end"`
 	Value    *IndexValue              `json:"value"`
+	RWLock   sync.RWMutex             `json:"-"`
 }
 
 type PrefixTrie struct {
@@ -51,6 +53,11 @@ func (t *PrefixTrie) Close() error {
 	return nil
 }
 func (t *PrefixTrie) Get(key string) (*IndexValue, error) {
+	t.Root.RWLock.RLock()
+	defer t.Root.RWLock.RUnlock()
+	if t.Root == nil {
+		return nil, fmt.Errorf("trie is not initialized")
+	}
 	node := t.Root
 	for _, char := range key {
 		if _, exists := node.Children[char]; !exists {
@@ -65,6 +72,8 @@ func (t *PrefixTrie) Get(key string) (*IndexValue, error) {
 }
 
 func (t *PrefixTrie) Set(key string, value *IndexValue) error {
+	t.Root.RWLock.Lock()
+	defer t.Root.RWLock.Unlock()
 	node := t.Root
 	for _, char := range key {
 		if _, exists := node.Children[char]; !exists {
@@ -80,6 +89,8 @@ func (t *PrefixTrie) Set(key string, value *IndexValue) error {
 }
 
 func (t *PrefixTrie) Delete(key string) error {
+	t.Root.RWLock.Lock()
+	defer t.Root.RWLock.Unlock()
 	node := t.Root
 	stack := []*PrefixTrieNode{node}
 	for _, char := range key {
@@ -109,6 +120,8 @@ func (t *PrefixTrie) Delete(key string) error {
 }
 
 func (t *PrefixTrie) Exists(key string) (bool, error) {
+	t.Root.RWLock.RLock()
+	defer t.Root.RWLock.RUnlock()
 	node := t.Root
 	for _, char := range key {
 		if _, exists := node.Children[char]; !exists {
@@ -120,6 +133,8 @@ func (t *PrefixTrie) Exists(key string) (bool, error) {
 }
 
 func (t *PrefixTrie) Count() (int, error) {
+	t.Root.RWLock.RLock()
+	defer t.Root.RWLock.RUnlock()
 	count := 0
 	var countNodes func(node *PrefixTrieNode)
 	countNodes = func(node *PrefixTrieNode) {
@@ -135,6 +150,9 @@ func (t *PrefixTrie) Count() (int, error) {
 }
 
 func (t *PrefixTrie) Iterate() (<-chan map[string]*IndexValue, error) {
+	// Ensure that channel is getting consumed properly else Trie updates will block
+	t.Root.RWLock.RLock()
+	defer t.Root.RWLock.RUnlock()
 	ch := make(chan map[string]*IndexValue)
 	go func() {
 		var iterateNodes func(node *PrefixTrieNode, prefix string)
@@ -154,6 +172,8 @@ func (t *PrefixTrie) Iterate() (<-chan map[string]*IndexValue, error) {
 
 func (t *PrefixTrie) Encode() ([]byte, error) {
 	// Serialize using MessagePack
+	t.Root.RWLock.RLock()
+	defer t.Root.RWLock.RUnlock()
 	data, err := msgpack.Marshal(t.Root)
 	if err != nil {
 		return nil, fmt.Errorf("failed to encode trie: %v", err)
@@ -163,6 +183,8 @@ func (t *PrefixTrie) Encode() ([]byte, error) {
 
 func (t *PrefixTrie) Decode(data []byte) error {
 	// Implement deserialization logic here
+	t.Root.RWLock.Lock()
+	defer t.Root.RWLock.Unlock()
 	var root PrefixTrieNode
 	if err := msgpack.Unmarshal(data, &root); err != nil {
 		return fmt.Errorf("failed to decode trie: %v", err)
