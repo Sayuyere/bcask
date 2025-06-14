@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sayuyere/bcask/internal/item"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -22,8 +23,8 @@ func TestIndex(t *testing.T) {
 		require.NotNil(t, index)
 
 		t.Run("Set", func(t *testing.T) {
-			err := index.Set("key1", &IndexValue{
-				FileID:    "file1",
+			err := index.Set("key1", &item.Item{
+				FileID:    1,
 				ValueSize: 123,
 				Offset:    0,
 				Timestamp: time.Now().Unix(),
@@ -34,7 +35,7 @@ func TestIndex(t *testing.T) {
 		t.Run("Get", func(t *testing.T) {
 			value, err := index.Get("key1")
 			require.NoError(t, err)
-			assert.Equal(t, "file1", value.FileID)
+			assert.Equal(t, int64(1), value.FileID)
 			assert.Equal(t, int64(123), value.ValueSize)
 			assert.Equal(t, int64(0), value.Offset)
 			assert.Equal(t, time.Now().Unix(), value.Timestamp)
@@ -57,16 +58,16 @@ func TestIndex(t *testing.T) {
 		require.NotNil(t, index)
 
 		// Set some values
-		err := index.Set("key1", &IndexValue{
-			FileID:    "file1",
+		err := index.Set("key1", &item.Item{
+			FileID:    1,
 			ValueSize: 123,
 			Offset:    0,
 			Timestamp: time.Now().Unix(),
 		})
 		require.NoError(t, err)
 
-		err = index.Set("key2", &IndexValue{
-			FileID:    "file2",
+		err = index.Set("key2", &item.Item{
+			FileID:    2,
 			ValueSize: 456,
 			Offset:    100,
 			Timestamp: time.Now().Unix(),
@@ -85,12 +86,12 @@ func TestIndex(t *testing.T) {
 		// Verify the values in the new index
 		value1, err := newIndex.Get("key1")
 		require.NoError(t, err)
-		assert.Equal(t, "file1", value1.FileID)
+		assert.Equal(t, int64(1), value1.FileID)
 		assert.Equal(t, int64(123), value1.ValueSize)
 
 		value2, err := newIndex.Get("key2")
 		require.NoError(t, err)
-		assert.Equal(t, "file2", value2.FileID)
+		assert.Equal(t, int64(2), value2.FileID)
 		assert.Equal(t, int64(456), value2.ValueSize)
 	})
 	t.Run("Close", func(t *testing.T) {

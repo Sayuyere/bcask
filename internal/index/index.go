@@ -4,14 +4,15 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/sayuyere/bcask/internal/item"
 	"github.com/vmihailenco/msgpack/v5"
 )
 
 type Index interface {
 	// Get retrieves the value associated with the given key.
-	Get(key string) (*IndexValue, error)
+	Get(key string) (*item.Item, error)
 	// Set associates the given value with the specified key.
-	Set(key string, value *IndexValue) error
+	Set(key string, value *item.Item) error
 	// Delete removes the key-value pair associated with the given key.
 	Delete(key string) error
 	// Exists checks if the key exists in the index.
@@ -19,7 +20,7 @@ type Index interface {
 	// Close releases any resources held by the index.
 	Close() error
 	// Iterate returns a channel to iterate over all key-value pairs in the index.
-	Iterate() (<-chan map[string]*IndexValue, error)
+	Iterate() (<-chan map[string]*item.Item, error)
 	// Count returns the number of key-value pairs in the index.
 	Count() (int, error)
 	// Clear removes all key-value pairs from the index.
@@ -30,17 +31,10 @@ type Index interface {
 	Decode(data []byte) error
 }
 
-type IndexValue struct {
-	FileID    string `json:"file_id"`
-	ValueSize int64  `json:"value_size"`
-	Offset    int64  `json:"offset"`
-	Timestamp int64  `json:"timestamp"`
-}
-
 type PrefixTrieNode struct {
 	Children map[rune]*PrefixTrieNode `json:"children"`
 	IsEnd    bool                     `json:"is_end"`
-	Value    *IndexValue              `json:"value"`
+	Value    *item.Item               `json:"value"`
 	RWLock   sync.RWMutex             `json:"-"`
 }
 
@@ -52,7 +46,7 @@ func (t *PrefixTrie) Close() error {
 	// No resources to release in this implementation
 	return nil
 }
-func (t *PrefixTrie) Get(key string) (*IndexValue, error) {
+func (t *PrefixTrie) Get(key string) (*item.Item, error) {
 	t.Root.RWLock.RLock()
 	defer t.Root.RWLock.RUnlock()
 	if t.Root == nil {
@@ -71,7 +65,7 @@ func (t *PrefixTrie) Get(key string) (*IndexValue, error) {
 	return nil, fmt.Errorf("key not found")
 }
 
-func (t *PrefixTrie) Set(key string, value *IndexValue) error {
+func (t *PrefixTrie) Set(key string, value *item.Item) error {
 	t.Root.RWLock.Lock()
 	defer t.Root.RWLock.Unlock()
 	node := t.Root
@@ -149,16 +143,16 @@ func (t *PrefixTrie) Count() (int, error) {
 	return count, nil
 }
 
-func (t *PrefixTrie) Iterate() (<-chan map[string]*IndexValue, error) {
+func (t *PrefixTrie) Iterate() (<-chan map[string]*item.Item, error) {
 	// Ensure that channel is getting consumed properly else Trie updates will block
 	t.Root.RWLock.RLock()
 	defer t.Root.RWLock.RUnlock()
-	ch := make(chan map[string]*IndexValue)
+	ch := make(chan map[string]*item.Item)
 	go func() {
 		var iterateNodes func(node *PrefixTrieNode, prefix string)
 		iterateNodes = func(node *PrefixTrieNode, prefix string) {
 			if node.IsEnd {
-				ch <- map[string]*IndexValue{prefix: node.Value}
+				ch <- map[string]*item.Item{prefix: node.Value}
 			}
 			for char, child := range node.Children {
 				iterateNodes(child, prefix+string(char))
