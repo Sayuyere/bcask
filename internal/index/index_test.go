@@ -23,7 +23,7 @@ func TestIndex(t *testing.T) {
 		require.NotNil(t, index)
 
 		t.Run("Set", func(t *testing.T) {
-			err := index.Set("key1", &item.Item{
+			err := index.Set("key1", &item.MemoryItem{
 				FileID:    1,
 				ValueSize: 123,
 				Offset:    0,
@@ -58,7 +58,7 @@ func TestIndex(t *testing.T) {
 		require.NotNil(t, index)
 
 		// Set some values
-		err := index.Set("key1", &item.Item{
+		err := index.Set("key1", &item.MemoryItem{
 			FileID:    1,
 			ValueSize: 123,
 			Offset:    0,
@@ -66,7 +66,7 @@ func TestIndex(t *testing.T) {
 		})
 		require.NoError(t, err)
 
-		err = index.Set("key2", &item.Item{
+		err = index.Set("key2", &item.MemoryItem{
 			FileID:    2,
 			ValueSize: 456,
 			Offset:    100,
