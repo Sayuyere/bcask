@@ -1,6 +1,10 @@
 package db
 
-import "sync"
+import (
+	"sync"
+
+	"github.com/sayuyere/bcask/internal/segment"
+)
 
 type DB interface {
 	// Get retrieves a value by key.
@@ -32,8 +36,8 @@ type DB interface {
 type Bcask struct {
 	Path          string
 	DBName        string
-	ActiveSegment interface{}
-	Lock          sync.RWMutex // Assuming Sync.RWMutex is defined elsewhere
+	ActiveSegment map[int64]*segment.Segment // Assuming Segment is defined in the segment package
+	Lock          sync.RWMutex               // Assuming Sync.RWMutex is defined elsewhere
 }
 
 func (b *Bcask) Get(key string) (string, error) {
