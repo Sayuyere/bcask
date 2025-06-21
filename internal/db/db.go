@@ -1,5 +1,7 @@
 package db
 
+import "sync"
+
 type DB interface {
 	// Get retrieves a value by key.
 	Get(key string) (string, error)
@@ -25,4 +27,53 @@ type DB interface {
 
 	// Close closes the datastore.
 	Close() error
+}
+
+type Bcask struct {
+	Path          string
+	DBName        string
+	ActiveSegment interface{}
+	Lock          sync.RWMutex // Assuming Sync.RWMutex is defined elsewhere
+}
+
+func (b *Bcask) Get(key string) (string, error) {
+	// Implementation of Get method
+	return "", nil // Placeholder return
+}
+func (b *Bcask) Put(key, value string) error {
+	// Implementation of Put method
+	return nil // Placeholder return
+}
+func (b *Bcask) Delete(key string) error {
+	// Implementation of Delete method
+	return nil // Placeholder return
+}
+func (b *Bcask) ListKeys() ([]string, error) {
+	// Implementation of ListKeys method
+	return nil, nil // Placeholder return
+}
+func (b *Bcask) Fold(fn func(key, value string, acc interface{}) interface{}, acc interface{}) interface{} {
+	// Implementation of Fold method
+	return acc // Placeholder return
+}
+func (b *Bcask) Merge() error {
+	// Implementation of Merge method
+	return nil // Placeholder return
+}
+func (b *Bcask) Sync() error {
+	// Implementation of Sync method
+	return nil // Placeholder return
+}
+
+func (b *Bcask) Close() error {
+	// Implementation of Close method
+	return nil // Placeholder return
+}
+func NewBcask(path, dbName string) *Bcask {
+	return &Bcask{
+		Path:          path,
+		DBName:        dbName,
+		ActiveSegment: nil,
+		Lock:          sync.RWMutex{},
+	}
 }
