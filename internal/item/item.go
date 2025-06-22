@@ -2,8 +2,9 @@ package item
 
 import (
 	"encoding/binary"
+	"fmt"
 
-	"codeberg.org/go-mmap/mmap"
+	mmap "github.com/edsrzf/mmap-go"
 )
 
 type MemoryItem struct {
@@ -63,32 +64,33 @@ func (m *DiskKV) DecodeToMemoryItem() MemoryItem {
 	}
 }
 
-func (m *DiskKV) DecodeFromFile(file *mmap.File, offset int64) {
-	// Read header (24 bytes: timestamp, key_size, value_size)
-	header := make([]byte, 24)
-	n, err := file.ReadAt(header, offset)
-	if err != nil || n < 24 {
-		// Could not read header
+func (m *DiskKV) DecodeFromMMapedFile(mm *mmap.MMap, offset int64) {
+	// Ensure we have enough data for the header
+	mmInstance := (*mm)
+	if int(offset)+24 > len(mmInstance) {
 		return
 	}
-	m.Timestamp = int64(binary.BigEndian.Uint64(header[0:8]))
-	m.KeySize = int64(binary.BigEndian.Uint64(header[8:16]))
-	m.ValueSize = int64(binary.BigEndian.Uint64(header[16:24]))
+	m.Timestamp = int64(binary.BigEndian.Uint64(mmInstance[offset : offset+8]))
+	m.KeySize = int64(binary.BigEndian.Uint64(mmInstance[offset+8 : offset+16]))
+	m.ValueSize = int64(binary.BigEndian.Uint64(mmInstance[offset+16 : offset+24]))
+	fmt.Println(m.Timestamp, m.KeySize, m.ValueSize)
 
-	// Now read key and value
-	key := make([]byte, m.KeySize)
-	n, err = file.ReadAt(key, offset+24)
-	if err != nil || int64(n) < m.KeySize {
-		// Could not read key
-		return
-	}
-	value := make([]byte, m.ValueSize)
-	n, err = file.ReadAt(value, offset+24+m.KeySize)
-	if err != nil || int64(n) < m.ValueSize {
-		// Could not read value
+	// totalLen := 24 + m.KeySize + m.ValueSize
+	// if int(offset)+int(totalLen) > len(mmInstance) {
+	// 	// Not enough data for key and value
+	// 	panic("memory-mapped file does not contain enough data to read the requested number of bytes")
+	// 	return
+	// }
+	keyStart := offset + 24
+	keyEnd := keyStart + m.KeySize
+	valueStart := keyEnd
+	valueEnd := valueStart + m.ValueSize
+
+	// Defensive bounds check
+	if keyEnd > int64(len(mmInstance)) || valueEnd > int64(len(mmInstance)) {
 		return
 	}
 
-	m.Key = string(key)
-	m.Value = string(value)
+	m.Key = string(mmInstance[keyStart:keyEnd])
+	m.Value = string(mmInstance[valueStart:valueEnd])
 }

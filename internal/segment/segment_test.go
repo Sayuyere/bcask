@@ -4,14 +4,16 @@ import (
 	"os"
 	"testing"
 
-	"codeberg.org/go-mmap/mmap"
+	mmap "github.com/edsrzf/mmap-go"
 	"github.com/sayuyere/bcask/internal/item"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestFileSegment(t *testing.T) {
 	// Create a new memory-mapped file for testing
-	tempFile, err := os.CreateTemp("", "segment_test_")
+	tmpfileName := "./test"
+
+	tempFile, err := os.Create(tmpfileName)
 	defer func() {
 		if tempFile != nil {
 			tempFile.Close()
@@ -19,18 +21,19 @@ func TestFileSegment(t *testing.T) {
 		}
 	}()
 
+	tempFile.Truncate(int64(SEGMENT_SIZE))
+
 	if err != nil {
 		t.Fatalf("failed to create temp file: %v", err)
 	}
-	file, err := mmap.OpenFile(tempFile.Name(), mmap.Read|mmap.Write)
-	// Set the size of the file to 1024 byte
-	// file, err := mmap.MapRegion(tempFile, 1024, mmap.RW, 0, 0)
+
+	mm, err := mmap.Map(tempFile, mmap.RDWR, 0)
 	if err != nil {
 		t.Fatalf("failed to create mmap region: %v", err)
 	}
 
 	segment := &FileSegment{
-		File: file,
+		File: &mm,
 	}
 
 	t.Run("Write and Get", func(t *testing.T) {

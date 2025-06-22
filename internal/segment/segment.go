@@ -3,11 +3,12 @@ package segment
 import (
 	"fmt"
 
-	"codeberg.org/go-mmap/mmap"
+	mmap "github.com/edsrzf/mmap-go"
 	"github.com/sayuyere/bcask/internal/item"
 )
 
 const SEGMENT string = "segment_file_"
+const SEGMENT_SIZE int64 = 1024 * 1024 * 4 //4MB Segment Size
 
 type Segment interface {
 	// Get retrieves a value by key.
@@ -25,68 +26,73 @@ type FileSegment struct {
 	// FileID is the identifier for the segment file.
 	FileID int64
 	// Segment is the segment associated with the file.
-	File *mmap.File
+	File *mmap.MMap
 }
 
 func (f *FileSegment) Get(offset int64) (item.DiskKV, error) {
 	// Implementation of Get method
 	res := item.DiskKV{}
-	res.DecodeFromFile(f.File, offset)
+	res.DecodeFromMMapedFile(f.File, offset)
 	return res, nil
 }
 func (f *FileSegment) Write(val item.DiskKV) error {
-	// Implementation of Write method
-	n, err := f.File.Write(val.Encode())
-	if err != nil {
-		return fmt.Errorf("failed to write to segment file: %v", err)
-	}
-	if n != len(val.Encode()) {
-		return fmt.Errorf("incomplete write to segment file: expected %d bytes, got %d", len(val.Encode()), n)
-	}
-
-	return nil // Placeholder return
-}
-func (f *FileSegment) Delete(val item.MemoryItem) error {
-	// Implementation of Delete method
-	locationItem := item.DiskKV{}
-	locationItem.DecodeFromFile(f.File, val.Offset)
-	locationItem.Timestamp = 0 // Mark as deleted by setting timestamp to zero
-	byteCount, err := f.File.WriteAt(locationItem.Encode(), val.Offset)
-	if err != nil {
-		return fmt.Errorf("failed to write to segment file: %v", err)
-	}
-	if byteCount != len(locationItem.Encode()) {
-		return fmt.Errorf("incomplete write to segment file: expected %d bytes, got %d", len(locationItem.Encode()), byteCount)
+	// Write the encoded value at the end of the file (append mode is assumed)
+	data := val.Encode()
+	mm := *f.File
+	fmt.Println("Writing Data -> ", data)
+	fmt.Println("Length of the File :: -> ", len(mm))
+	n := copy(mm[0:], data)
+	fmt.Println(string(mm))
+	if n != len(data) {
+		return fmt.Errorf("incomplete write to segment file: expected %d bytes, got %d", len(data), n)
 	}
 	return nil
-
 }
-func (f *FileSegment) Sync() error {
-	// Implementation of Sync method
 
-	if err := f.File.Sync(); err != nil {
+func (f *FileSegment) WriteAt(val item.DiskKV, offset int) error {
+	data := val.Encode()
+	m := *f.File
+	if offset < 0 || offset+len(data) > len(m) {
+		return fmt.Errorf("offset out of bounds")
+	}
+	n := copy(m[offset:offset+len(data)], data)
+	if n != len(data) {
+		return fmt.Errorf("unable to write required bytes: expected %d, wrote %d", len(data), n)
+	}
+	return nil
+}
+
+func (f *FileSegment) Delete(val item.MemoryItem) error {
+	// Mark the record as deleted by setting its timestamp to zero
+	locationItem := item.DiskKV{}
+	locationItem.DecodeFromMMapedFile(f.File, val.Offset)
+	locationItem.Timestamp = 0 // Mark as deleted
+	// data := locationItem.Encode()
+
+	err := f.WriteAt(locationItem, int(val.Offset))
+	if err != nil {
+		return fmt.Errorf("failed to write to segment file: %v", err)
+	}
+
+	return nil
+}
+
+func (f *FileSegment) Sync() error {
+
+	if err := f.File.Flush(); err != nil {
 		return fmt.Errorf("failed to sync segment file: %v", err)
 	}
-	// Additional logic for syncing if necessary
-	// For example, updating metadata or flushing buffers
-	// ...
-	// Return nil if sync is successful
-
 	return nil
 }
+
 func (f *FileSegment) Close() error {
-	// Implementation of Close method
-	err := f.File.Sync()
+
+	err := f.Sync()
 	if err != nil {
-		return fmt.Errorf("failed to sync segment file before closing: %v", err)
+		fmt.Println(err)
 	}
-	err = f.File.Close()
-	if err != nil {
+	if err := f.File.Unmap(); err != nil {
 		return fmt.Errorf("failed to close segment file: %v", err)
 	}
-	// Additional cleanup if necessary
-	// For example, removing the file from the filesystem or releasing resources
-	// ...
-	// Return nil if close is successful
 	return nil
 }
