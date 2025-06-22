@@ -81,8 +81,8 @@ func (f *FileSegment) WriteAt(val item.DiskKV, offset int) error {
 
 func (f *FileSegment) Delete(val item.MemoryItem) error {
 	// Mark the record as deleted by setting its timestamp to zero
-	f.Lock.Lock()
-	defer f.Lock.Unlock()
+	// f.Lock.RLock()
+	// defer f.Lock.RUnlock()
 	locationItem := item.DiskKV{}
 	locationItem.DecodeFromMMapedFile(f.File, val.Offset)
 	locationItem.Timestamp = 0 // Mark as deleted
@@ -97,8 +97,8 @@ func (f *FileSegment) Delete(val item.MemoryItem) error {
 }
 
 func (f *FileSegment) Sync() error {
-	f.Lock.Lock()
-	defer f.Lock.Unlock()
+	f.Lock.RLock()
+	defer f.Lock.RUnlock()
 
 	if err := f.File.Flush(); err != nil {
 		return fmt.Errorf("failed to sync segment file: %v", err)
@@ -111,13 +111,13 @@ func (f *FileSegment) GetOffset() int64 {
 	return f.Offset
 }
 func (f *FileSegment) Close() error {
-	f.Lock.Lock()
-	defer f.Lock.Unlock()
 
 	err := f.Sync()
 	if err != nil {
 		fmt.Println(err)
 	}
+	f.Lock.Lock()
+	defer f.Lock.Unlock()
 	if err := f.File.Unmap(); err != nil {
 		return fmt.Errorf("failed to close segment file: %v", err)
 	}

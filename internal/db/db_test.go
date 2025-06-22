@@ -29,6 +29,11 @@ func TestNewBcask(t *testing.T) {
 	dbName := "testdb_nomock"
 	fullPath := filepath.Join(tempDir, dbName)
 	b := NewBcask(fullPath, dbName)
+	defer func() {
+		if err := b.Close(); err != nil {
+			t.Errorf("Error closing Bcask: %v", err)
+		}
+	}()
 	t.Run("successful creation", func(t *testing.T) {
 
 		if b == nil {
@@ -46,7 +51,6 @@ func TestNewBcask(t *testing.T) {
 		if b.Index == nil {
 			t.Errorf("Index is nil")
 		}
-		b.Close()
 
 	})
 }
@@ -57,6 +61,7 @@ func TestBcaskPutGet(t *testing.T) {
 
 	dbName := "put_get_db_nomock"
 	b := NewBcask(tempDir, dbName)
+
 	defer func() {
 		if err := b.Close(); err != nil {
 			t.Errorf("Error closing Bcask: %v", err)
