@@ -2,7 +2,6 @@ package item
 
 import (
 	"encoding/binary"
-	"fmt"
 
 	mmap "github.com/edsrzf/mmap-go"
 )
@@ -73,14 +72,6 @@ func (m *DiskKV) DecodeFromMMapedFile(mm *mmap.MMap, offset int64) {
 	m.Timestamp = int64(binary.BigEndian.Uint64(mmInstance[offset : offset+8]))
 	m.KeySize = int64(binary.BigEndian.Uint64(mmInstance[offset+8 : offset+16]))
 	m.ValueSize = int64(binary.BigEndian.Uint64(mmInstance[offset+16 : offset+24]))
-	fmt.Println(m.Timestamp, m.KeySize, m.ValueSize)
-
-	// totalLen := 24 + m.KeySize + m.ValueSize
-	// if int(offset)+int(totalLen) > len(mmInstance) {
-	// 	// Not enough data for key and value
-	// 	panic("memory-mapped file does not contain enough data to read the requested number of bytes")
-	// 	return
-	// }
 	keyStart := offset + 24
 	keyEnd := keyStart + m.KeySize
 	valueStart := keyEnd

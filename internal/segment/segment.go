@@ -26,7 +26,8 @@ type FileSegment struct {
 	// FileID is the identifier for the segment file.
 	FileID int64
 	// Segment is the segment associated with the file.
-	File *mmap.MMap
+	File   *mmap.MMap
+	Offset int64
 }
 
 func (f *FileSegment) Get(offset int64) (item.DiskKV, error) {
@@ -39,13 +40,11 @@ func (f *FileSegment) Write(val item.DiskKV) error {
 	// Write the encoded value at the end of the file (append mode is assumed)
 	data := val.Encode()
 	mm := *f.File
-	fmt.Println("Writing Data -> ", data)
-	fmt.Println("Length of the File :: -> ", len(mm))
-	n := copy(mm[0:], data)
-	fmt.Println(string(mm))
+	n := copy(mm[f.Offset:], data)
 	if n != len(data) {
 		return fmt.Errorf("incomplete write to segment file: expected %d bytes, got %d", len(data), n)
 	}
+	f.Offset += int64(len(data))
 	return nil
 }
 
