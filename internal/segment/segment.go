@@ -4,19 +4,17 @@ import (
 	"fmt"
 
 	mmap "github.com/edsrzf/mmap-go"
+	"github.com/sayuyere/bcask/internal/consts"
 	"github.com/sayuyere/bcask/internal/item"
 )
-
-const SEGMENT string = "segment_file_"
-const SEGMENT_SIZE int64 = 1024 * 1024 * 4 //4MB Segment Size
 
 type Segment interface {
 	// Get retrieves a value by key.
 	Get(offset int64) (item.DiskKV, error)
 	// Write stores a value by key.
-	Write(key item.DiskKV, value string) error
+	Write(val item.DiskKV) error
 	// Delete removes a value by key.
-	Delete(key item.DiskKV) error
+	Delete(val item.MemoryItem) error
 	Sync() error
 	// Close closes the segment.
 	Close() error
@@ -37,12 +35,16 @@ func (f *FileSegment) Get(offset int64) (item.DiskKV, error) {
 	return res, nil
 }
 func (f *FileSegment) Write(val item.DiskKV) error {
-	// Write the encoded value at the end of the file (append mode is assumed)
 	data := val.Encode()
 	mm := *f.File
+
+	if int(f.Offset)+len(data) > len(mm) {
+		return consts.ErrorSegmentCapacityFull
+	}
+
 	n := copy(mm[f.Offset:], data)
 	if n != len(data) {
-		return fmt.Errorf("incomplete write to segment file: expected %d bytes, got %d", len(data), n)
+		return consts.ErrorMMapIncompleteWrite
 	}
 	f.Offset += int64(len(data))
 	return nil
@@ -51,8 +53,11 @@ func (f *FileSegment) Write(val item.DiskKV) error {
 func (f *FileSegment) WriteAt(val item.DiskKV, offset int) error {
 	data := val.Encode()
 	m := *f.File
-	if offset < 0 || offset+len(data) > len(m) {
-		return fmt.Errorf("offset out of bounds")
+	if offset < 0 {
+		return consts.ErrorInvalidOffset
+	}
+	if offset+len(data) > len(m) {
+		return consts.ErrorSegmentCapacityFull
 	}
 	n := copy(m[offset:offset+len(data)], data)
 	if n != len(data) {

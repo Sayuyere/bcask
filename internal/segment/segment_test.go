@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	mmap "github.com/edsrzf/mmap-go"
+	"github.com/sayuyere/bcask/internal/consts"
 	"github.com/sayuyere/bcask/internal/item"
 	"github.com/stretchr/testify/assert"
 )
@@ -21,7 +22,7 @@ func TestFileSegment(t *testing.T) {
 		}
 	}()
 
-	tempFile.Truncate(int64(SEGMENT_SIZE))
+	tempFile.Truncate(int64(consts.SegmentMaxSize))
 
 	if err != nil {
 		t.Fatalf("failed to create temp file: %v", err)
