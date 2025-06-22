@@ -2,6 +2,10 @@ package segment
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
+	"strconv"
+	"sync"
 
 	mmap "github.com/edsrzf/mmap-go"
 	"github.com/sayuyere/bcask/internal/consts"
@@ -18,6 +22,7 @@ type Segment interface {
 	Sync() error
 	// Close closes the segment.
 	Close() error
+	GetOffset() int64
 }
 type FileSegment struct {
 	Path string
@@ -26,15 +31,21 @@ type FileSegment struct {
 	// Segment is the segment associated with the file.
 	File   *mmap.MMap
 	Offset int64
+	OSFile *os.File
+	Lock   sync.RWMutex
 }
 
 func (f *FileSegment) Get(offset int64) (item.DiskKV, error) {
 	// Implementation of Get method
+	f.Lock.RLock()
+	defer f.Lock.RUnlock()
 	res := item.DiskKV{}
 	res.DecodeFromMMapedFile(f.File, offset)
 	return res, nil
 }
 func (f *FileSegment) Write(val item.DiskKV) error {
+	f.Lock.Lock()
+	defer f.Lock.Unlock()
 	data := val.Encode()
 	mm := *f.File
 
@@ -51,6 +62,8 @@ func (f *FileSegment) Write(val item.DiskKV) error {
 }
 
 func (f *FileSegment) WriteAt(val item.DiskKV, offset int) error {
+	f.Lock.Lock()
+	defer f.Lock.Unlock()
 	data := val.Encode()
 	m := *f.File
 	if offset < 0 {
@@ -68,6 +81,8 @@ func (f *FileSegment) WriteAt(val item.DiskKV, offset int) error {
 
 func (f *FileSegment) Delete(val item.MemoryItem) error {
 	// Mark the record as deleted by setting its timestamp to zero
+	f.Lock.Lock()
+	defer f.Lock.Unlock()
 	locationItem := item.DiskKV{}
 	locationItem.DecodeFromMMapedFile(f.File, val.Offset)
 	locationItem.Timestamp = 0 // Mark as deleted
@@ -82,14 +97,22 @@ func (f *FileSegment) Delete(val item.MemoryItem) error {
 }
 
 func (f *FileSegment) Sync() error {
+	f.Lock.Lock()
+	defer f.Lock.Unlock()
 
 	if err := f.File.Flush(); err != nil {
 		return fmt.Errorf("failed to sync segment file: %v", err)
 	}
 	return nil
 }
-
+func (f *FileSegment) GetOffset() int64 {
+	f.Lock.RLock()
+	defer f.Lock.RUnlock()
+	return f.Offset
+}
 func (f *FileSegment) Close() error {
+	f.Lock.Lock()
+	defer f.Lock.Unlock()
 
 	err := f.Sync()
 	if err != nil {
@@ -99,4 +122,28 @@ func (f *FileSegment) Close() error {
 		return fmt.Errorf("failed to close segment file: %v", err)
 	}
 	return nil
+}
+
+func NewFileSegment(filepath_ string, fileID int64, offset int64) *FileSegment {
+	segmentLocation := filepath.Join(filepath_, consts.SegmentPrefix+strconv.Itoa(int(fileID)))
+	fmt.Println(segmentLocation)
+	f, err := os.Create(segmentLocation)
+	if err != nil {
+		panic(err)
+	}
+
+	f.Truncate(consts.SegmentMaxSize)
+	m, err := mmap.Map(f, os.O_RDWR, 0666)
+	if err != nil {
+		panic(err)
+	}
+	return &FileSegment{
+		Path:   segmentLocation,
+		FileID: fileID,
+		File:   &m,
+		Offset: 0,
+		OSFile: f,
+		Lock:   sync.RWMutex{},
+	}
+
 }

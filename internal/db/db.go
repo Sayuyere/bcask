@@ -1,8 +1,14 @@
 package db
 
 import (
+	"os"
+	"path/filepath"
 	"sync"
+	"time"
 
+	"github.com/sayuyere/bcask/internal/consts"
+	"github.com/sayuyere/bcask/internal/index"
+	"github.com/sayuyere/bcask/internal/item"
 	"github.com/sayuyere/bcask/internal/segment"
 )
 
@@ -34,26 +40,69 @@ type DB interface {
 }
 
 type Bcask struct {
-	Path          string
-	DBName        string
-	ActiveSegment map[int64]*segment.Segment // Assuming Segment is defined in the segment package
-	Lock          sync.RWMutex               // Assuming Sync.RWMutex is defined elsewhere
+	Path       string
+	DBName     string
+	DBSegments []*segment.FileSegment // Assuming Segment is defined in the segment package
+	Lock       sync.RWMutex           // Assuming Sync.RWMutex is defined elsewhere
+	Index      *index.PrefixTrie
 }
 
 func (b *Bcask) Get(key string) (string, error) {
 	// Implementation of Get method
-	return "", nil // Placeholder return
+	b.Lock.RLock()
+	defer b.Lock.RUnlock()
+	item, err := b.Index.Get(key)
+	if err != nil {
+		return "", err
+	}
+	kv, err := b.DBSegments[item.FileID].Get(item.Offset)
+	if err != nil {
+		return "", err
+	}
+	return kv.Value, nil
 }
 func (b *Bcask) Put(key, value string) error {
 	// Implementation of Put method
+
+	b.Lock.Lock()
+	defer b.Lock.Unlock()
+	v := item.MemoryItem{
+		FileID:    int64(len(b.DBSegments)) - 1,
+		ValueSize: int64(len(value)),
+		Offset:    b.DBSegments[len(b.DBSegments)-1].GetOffset(),
+		Timestamp: time.Now().Unix(),
+		// To fix this offset stuff ideally when you have written then use the offsett
+	}
+	b.Index.Set(key, &v)
+	dkv := item.DiskKV{
+		KeySize:   int64(len(key)),
+		ValueSize: int64(len(value)),
+		Key:       key,
+		Value:     value,
+		Timestamp: v.Timestamp,
+	}
+	err := b.DBSegments[len(b.DBSegments)-1].Write(dkv)
+	if err == consts.ErrorSegmentCapacityFull {
+		b.DBSegments = append(b.DBSegments, segment.NewFileSegment(b.Path, int64(len(b.DBSegments)), 0))
+	} else {
+		return err
+	}
+	err = b.DBSegments[len(b.DBSegments)-1].Write(dkv)
+	if err != nil {
+		return err
+	}
 	return nil // Placeholder return
 }
 func (b *Bcask) Delete(key string) error {
 	// Implementation of Delete method
+	b.Lock.Lock()
+	defer b.Lock.Unlock()
 	return nil // Placeholder return
 }
 func (b *Bcask) ListKeys() ([]string, error) {
 	// Implementation of ListKeys method
+	b.Lock.RLock()
+	defer b.Lock.RUnlock()
 	return nil, nil // Placeholder return
 }
 func (b *Bcask) Fold(fn func(key, value string, acc interface{}) interface{}, acc interface{}) interface{} {
@@ -70,14 +119,32 @@ func (b *Bcask) Sync() error {
 }
 
 func (b *Bcask) Close() error {
-	// Implementation of Close method
+	// Fix index stuff
+	b.Lock.Lock()
+	defer b.Lock.Unlock()
+	for _, v := range b.DBSegments {
+		// v.Close()
+		v.OSFile.Close()
+	}
+
 	return nil // Placeholder return
 }
-func NewBcask(path, dbName string) *Bcask {
+
+func NewBcask(path string, dbName string) *Bcask {
+	// Use filepath.Join for platform-neutral path construction
+	fullPath := filepath.Join(path, dbName)
+	fullPath = filepath.Clean(fullPath)
+	if err := os.MkdirAll(fullPath, 0755); err != nil {
+		panic("failed to create database directory: " + err.Error())
+	}
+	currentIndex := index.NewPrefixTrie()
+
+	var allSegments []*segment.FileSegment = []*segment.FileSegment{segment.NewFileSegment(fullPath, 0, 0)}
 	return &Bcask{
-		Path:          path,
-		DBName:        dbName,
-		ActiveSegment: nil,
-		Lock:          sync.RWMutex{},
+		Path:       fullPath,
+		DBName:     dbName,
+		DBSegments: allSegments,
+		Lock:       sync.RWMutex{},
+		Index:      currentIndex,
 	}
 }
