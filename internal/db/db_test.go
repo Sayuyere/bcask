@@ -3,7 +3,9 @@ package db
 import (
 	"os"
 	"path/filepath"
+	"strconv"
 	"testing"
+	"time"
 )
 
 // Helper function to create a temporary directory for each test
@@ -110,6 +112,38 @@ func TestBcaskPutGet(t *testing.T) {
 			t.Errorf("Expected value for first key %q, got %q (after second put)", value, retrievedValue)
 		}
 	})
+
+	t.Run("10000 Sets Tests", func(t *testing.T) {
+		key := "mykey"
+		value := "myvalue"
+		start := time.Now().Unix()
+		for i := 0; i < 10000; i++ {
+			err := b.Put(strconv.Itoa(i)+key, value)
+			if err != nil {
+				t.Fatalf("Put failed: %v", err)
+			}
+		}
+		t.Log("Time Elapsed", time.Now().Unix()-start)
+	})
+
+	t.Run("New Segment Creation Test", func(t *testing.T) {
+		key := "mykey"
+		tmp := make([]byte, 1024*1024)
+		for i := range tmp {
+			tmp[i] = 'a'
+		}
+		value := string(tmp)
+		for i := 0; i < 5; i++ {
+			err := b.Put(strconv.Itoa(i)+key, value)
+			if err != nil {
+				t.Fatalf("Put failed: %v", err)
+			}
+		}
+		if len(b.DBSegments) != 2 {
+			t.Errorf("Segment Creation Failed")
+		}
+	})
+
 }
 
 func TestBcaskDelete(t *testing.T) {

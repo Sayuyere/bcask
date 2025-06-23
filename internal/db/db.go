@@ -1,6 +1,7 @@
 package db
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"sync"
@@ -83,6 +84,7 @@ func (b *Bcask) Put(key, value string) error {
 	}
 	err := b.DBSegments[len(b.DBSegments)-1].Write(dkv)
 	if err == consts.ErrorSegmentCapacityFull {
+		fmt.Println("Adding a new segment")
 		b.DBSegments = append(b.DBSegments, segment.NewFileSegment(b.Path, int64(len(b.DBSegments)), 0))
 	} else {
 		return err
