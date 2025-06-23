@@ -111,3 +111,65 @@ func TestBcaskPutGet(t *testing.T) {
 		}
 	})
 }
+
+func TestBcaskDelete(t *testing.T) {
+	tempDir := createTempDir(t)
+	defer cleanupTempDir(t, tempDir)
+
+	dbName := "delete_db_nomock"
+	b := NewBcask(tempDir, dbName)
+
+	defer func() {
+		if err := b.Close(); err != nil {
+			t.Errorf("Error closing Bcask: %v", err)
+		}
+	}()
+
+	t.Run("successful put and get and delete", func(t *testing.T) {
+		key := "mykey"
+		value := "myvalue"
+
+		err := b.Put(key, value)
+		if err != nil {
+			t.Fatalf("Put failed: %v", err)
+		}
+
+		retrievedValue, err := b.Get(key)
+		if err != nil {
+			t.Fatalf("Get failed: %v", err)
+		}
+		if retrievedValue != value {
+			t.Errorf("Expected value %q, got %q", value, retrievedValue)
+		}
+
+		// Put another key-value pair to check multiple entries
+		key2 := "anotherkey"
+		value2 := "anothervalue"
+		err = b.Put(key2, value2)
+		if err != nil {
+			t.Fatalf("Put of second key failed: %v", err)
+		}
+
+		retrievedValue2, err := b.Get(key2)
+		if err != nil {
+			t.Fatalf("Get of second key failed: %v", err)
+		}
+		if retrievedValue2 != value2 {
+			t.Errorf("Expected value for second key %q, got %q", value2, retrievedValue2)
+		}
+
+		// Ensure the first key is still retrievable
+		retrievedValue, err = b.Get(key)
+		if err != nil {
+			t.Fatalf("Get of first key after second put failed: %v", err)
+		}
+		if retrievedValue != value {
+			t.Errorf("Expected value for first key %q, got %q (after second put)", value, retrievedValue)
+		}
+		err = b.Delete(key)
+		if err != nil {
+			t.Fatalf("Expected key to get deleted successfully %v", err)
+		}
+
+	})
+}

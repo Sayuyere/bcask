@@ -141,7 +141,7 @@ func NewFileSegment(filepath_ string, fileID int64, offset int64) *FileSegment {
 		Path:   segmentLocation,
 		FileID: fileID,
 		File:   &m,
-		Offset: 0,
+		Offset: offset,
 		OSFile: f,
 		Lock:   sync.RWMutex{},
 	}

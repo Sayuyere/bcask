@@ -97,7 +97,15 @@ func (b *Bcask) Delete(key string) error {
 	// Implementation of Delete method
 	b.Lock.Lock()
 	defer b.Lock.Unlock()
-	return nil // Placeholder return
+	item, err := b.Index.Get(key)
+	if err != nil {
+		return err
+	}
+	err = b.DBSegments[item.FileID].Delete(*item)
+	if err != nil {
+		return err
+	}
+	return b.Index.Delete(key)
 }
 func (b *Bcask) ListKeys() ([]string, error) {
 	// Implementation of ListKeys method
@@ -115,6 +123,7 @@ func (b *Bcask) Merge() error {
 }
 func (b *Bcask) Sync() error {
 	// Implementation of Sync method
+
 	return nil // Placeholder return
 }
 
