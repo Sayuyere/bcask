@@ -74,7 +74,6 @@ func (b *Bcask) Put(key, value string) error {
 		Timestamp: time.Now().Unix(),
 		// To fix this offset stuff ideally when you have written then use the offsett
 	}
-	b.Index.Set(key, &v)
 	dkv := item.DiskKV{
 		KeySize:   int64(len(key)),
 		ValueSize: int64(len(value)),
@@ -82,19 +81,31 @@ func (b *Bcask) Put(key, value string) error {
 		Value:     value,
 		Timestamp: v.Timestamp,
 	}
+	if int64(len(dkv.Encode())) > consts.SegmentMaxSize {
+		return consts.ErrorDiskKeyValueBigEntry
+	}
 	err := b.DBSegments[len(b.DBSegments)-1].Write(dkv)
+	if err == nil {
+		return b.Index.Set(key, &v)
+	}
+
 	if err == consts.ErrorSegmentCapacityFull {
-		fmt.Println("Adding a new segment")
-		b.DBSegments = append(b.DBSegments, segment.NewFileSegment(b.Path, int64(len(b.DBSegments)), 0))
-	} else {
-		return err
+		b.AddNewSegment()
+		err = b.DBSegments[len(b.DBSegments)-1].Write(dkv)
+		if err == nil {
+			return b.Index.Set(key, &v)
+		}
 	}
-	err = b.DBSegments[len(b.DBSegments)-1].Write(dkv)
-	if err != nil {
-		return err
-	}
-	return nil // Placeholder return
+
+	return err // Placeholder return
 }
+
+func (b *Bcask) AddNewSegment() {
+	fmt.Println("Adding a new segment: ", len(b.DBSegments))
+	b.DBSegments = append(b.DBSegments, segment.NewFileSegment(b.Path, int64(len(b.DBSegments)), 0))
+
+}
+
 func (b *Bcask) Delete(key string) error {
 	// Implementation of Delete method
 	b.Lock.Lock()
@@ -125,6 +136,35 @@ func (b *Bcask) Merge() error {
 }
 func (b *Bcask) Sync() error {
 	// Implementation of Sync method
+	b.Lock.Lock()
+	defer func() {
+		b.Lock.Unlock()
+		for _, v := range b.DBSegments {
+			// v.Close()
+			v.OSFile.Sync()
+		}
+	}()
+	indexfile, err := os.Create(filepath.Join(b.Path, consts.IndexFileName))
+	if err != nil {
+		return err
+	}
+	encodedData, err := b.Index.Encode()
+	if err != nil {
+		return err
+	}
+	writtenByte, err := indexfile.WriteAt(encodedData, 0)
+	if err != nil {
+		return err
+	}
+	if writtenByte != len(encodedData) {
+		return consts.ErrorMMapIncompleteWrite
+	}
+	if err := indexfile.Sync(); err != nil {
+		return err
+	}
+	if err := indexfile.Close(); err != nil {
+		return err
+	}
 
 	return nil // Placeholder return
 }
@@ -132,10 +172,34 @@ func (b *Bcask) Sync() error {
 func (b *Bcask) Close() error {
 	// Fix index stuff
 	b.Lock.Lock()
-	defer b.Lock.Unlock()
-	for _, v := range b.DBSegments {
-		// v.Close()
-		v.OSFile.Close()
+	defer func() {
+		b.Lock.Unlock()
+		for _, v := range b.DBSegments {
+			// v.Close()
+			v.OSFile.Close()
+		}
+
+	}()
+	indexfile, err := os.Create(filepath.Join(b.Path, consts.IndexFileName))
+	if err != nil {
+		return err
+	}
+	encodedData, err := b.Index.Encode()
+	if err != nil {
+		return err
+	}
+	writtenByte, err := indexfile.WriteAt(encodedData, 0)
+	if err != nil {
+		return err
+	}
+	if writtenByte != len(encodedData) {
+		return consts.ErrorMMapIncompleteWrite
+	}
+	if err := indexfile.Sync(); err != nil {
+		return err
+	}
+	if err := indexfile.Close(); err != nil {
+		return err
 	}
 
 	return nil // Placeholder return

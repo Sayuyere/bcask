@@ -6,6 +6,8 @@ import (
 	"strconv"
 	"testing"
 	"time"
+
+	"github.com/sayuyere/bcask/internal/consts"
 )
 
 // Helper function to create a temporary directory for each test
@@ -205,5 +207,31 @@ func TestBcaskDelete(t *testing.T) {
 			t.Fatalf("Expected key to get deleted successfully %v", err)
 		}
 
+	})
+}
+
+func TestBcaskIndexSerialization(t *testing.T) {
+	tempDir := createTempDir(t)
+	defer cleanupTempDir(t, tempDir)
+
+	dbName := "index_db_nomock"
+	b := NewBcask(tempDir, dbName)
+
+	t.Run("index file is created after put and close", func(t *testing.T) {
+		key := "mykey"
+		value := "myvalue"
+
+		if err := b.Put(key, value); err != nil {
+			t.Fatalf("Put failed: %v", err)
+		}
+
+		if err := b.Close(); err != nil {
+			t.Fatalf("Error closing Bcask: %v", err)
+		}
+
+		indexFilePath := filepath.Join(tempDir, consts.IndexFileName)
+		if _, err := os.Stat(indexFilePath); err != nil {
+			t.Errorf("Index file does not exist at %s: %v", indexFilePath, err)
+		}
 	})
 }
