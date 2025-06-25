@@ -124,6 +124,31 @@ func (f *FileSegment) Close() error {
 	return nil
 }
 
+func OpenFileSegment(filepath_ string, fileID int64, offset int64) *FileSegment {
+	segmentLocation := filepath.Join(filepath_, consts.SegmentPrefix+strconv.Itoa(int(fileID)))
+	f, err := os.OpenFile(segmentLocation, os.O_RDWR, 0666)
+	if err != nil {
+		panic(err)
+	}
+	err = f.Truncate(consts.SegmentMaxSize)
+	if err != nil {
+		panic(err)
+	}
+	m, err := mmap.Map(f, os.O_RDWR, 0666)
+	if err != nil {
+		panic(err)
+	}
+	return &FileSegment{
+		Path:   segmentLocation,
+		FileID: fileID,
+		File:   &m,
+		Offset: offset,
+		OSFile: f,
+		Lock:   sync.RWMutex{},
+	}
+
+}
+
 func NewFileSegment(filepath_ string, fileID int64, offset int64) *FileSegment {
 	segmentLocation := filepath.Join(filepath_, consts.SegmentPrefix+strconv.Itoa(int(fileID)))
 	fmt.Println(segmentLocation)

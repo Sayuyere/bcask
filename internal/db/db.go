@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -180,7 +181,7 @@ func (b *Bcask) Close() error {
 		}
 
 	}()
-	indexfile, err := os.Create(filepath.Join(b.Path, consts.IndexFileName))
+	indexfile, err := os.OpenFile(filepath.Join(b.Path, consts.IndexFileName), os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0666)
 	if err != nil {
 		return err
 	}
@@ -222,4 +223,61 @@ func NewBcask(path string, dbName string) *Bcask {
 		Lock:       sync.RWMutex{},
 		Index:      currentIndex,
 	}
+}
+
+func LoadBcask(path string, dbName string) *Bcask {
+	// Use filepath.Join for platform-neutral path construction
+	fullPath := filepath.Join(path, dbName)
+	fullPath = filepath.Clean(fullPath)
+	indexLoc := filepath.Join(fullPath, consts.IndexFileName)
+	indexData, err := os.ReadFile(indexLoc)
+	if err != nil {
+		panic(err)
+	}
+	currentIndex := index.NewPrefixTrie()
+	err = currentIndex.Decode(indexData)
+	if err != nil {
+		panic(err)
+	}
+	return &Bcask{
+		Path:       fullPath,
+		DBName:     dbName,
+		DBSegments: LoadSegments(fullPath),
+		Lock:       sync.RWMutex{},
+		Index:      currentIndex,
+	}
+}
+
+func LoadSegments(completePath string) []*segment.FileSegment {
+	files, err := os.ReadDir(completePath)
+	if err != nil {
+		panic(fmt.Sprintf("failed to read segment directory: %v", err))
+	}
+
+	var segments []*segment.FileSegment
+	for _, file := range files {
+		if file.IsDir() {
+			continue
+		}
+		// Assuming segment files have a specific extension, e.g., ".seg"
+
+		if !strings.HasPrefix(file.Name(), consts.SegmentPrefix) {
+			continue
+		}
+		// Extract segment ID from filename, e.g., "1.seg" -> 1
+		var id int64
+		_, err := fmt.Sscanf(file.Name(), consts.SegmentPrefix+"%d", &id)
+		if err != nil {
+			continue
+		}
+		seg := segment.OpenFileSegment(completePath, id, 0)
+		segments = append(segments, seg)
+	}
+
+	// If no segments found, create a new one
+	if len(segments) == 0 {
+		segments = append(segments, segment.NewFileSegment(completePath, 0, 0))
+	}
+
+	return segments
 }

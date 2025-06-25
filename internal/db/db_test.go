@@ -235,3 +235,89 @@ func TestBcaskIndexSerialization(t *testing.T) {
 		}
 	})
 }
+
+func TestBcaskDBSerialization(t *testing.T) {
+	tempDir := createTempDir(t)
+	defer cleanupTempDir(t, tempDir)
+
+	dbName := "db_serialization_nomock"
+	b := NewBcask(tempDir, dbName)
+
+	t.Run("create db, put/get, close, reload, get", func(t *testing.T) {
+		key := "persistkey"
+		value := "persistvalue"
+
+		// Put and Get before closing
+		if err := b.Put(key, value); err != nil {
+			t.Fatalf("Put failed: %v", err)
+		}
+		got, err := b.Get(key)
+		if err != nil {
+			t.Fatalf("Get failed: %v", err)
+		}
+		if got != value {
+			t.Errorf("Expected value %q, got %q", value, got)
+		}
+
+		// Close DB (should flush index)
+		if err := b.Close(); err != nil {
+			t.Fatalf("Close failed: %v", err)
+		}
+
+		// Reload DB
+		b2 := LoadBcask(tempDir, dbName)
+		defer b2.Close()
+
+		got2, err := b2.Get(key)
+		if err != nil {
+			t.Fatalf("Get after reload failed: %v", err)
+		}
+		if got2 != value {
+			t.Errorf("Expected value after reload %q, got %q", value, got2)
+		}
+	})
+
+	t.Run("multiple keys survive reload", func(t *testing.T) {
+		keys := []string{"k1", "k2", "k3"}
+		values := []string{"v1", "v2", "v3"}
+		for i := range keys {
+			if err := b.Put(keys[i], values[i]); err != nil {
+				t.Fatalf("Put failed: %v", err)
+			}
+		}
+		if err := b.Close(); err != nil {
+			t.Fatalf("Close failed: %v", err)
+		}
+		b2 := LoadBcask(tempDir, dbName)
+		defer b2.Close()
+		for i := range keys {
+			got, err := b2.Get(keys[i])
+			if err != nil {
+				t.Fatalf("Get %q after reload failed: %v", keys[i], err)
+			}
+			if got != values[i] {
+				t.Errorf("Expected %q, got %q", values[i], got)
+			}
+		}
+	})
+
+	t.Run("deleted key is not found after reload", func(t *testing.T) {
+		key := "todelete"
+		value := "someval"
+		if err := b.Put(key, value); err != nil {
+			t.Fatalf("Put failed: %v", err)
+		}
+		if err := b.Delete(key); err != nil {
+			t.Fatalf("Delete failed: %v", err)
+		}
+		if err := b.Close(); err != nil {
+			t.Fatalf("Close failed: %v", err)
+		}
+		b2 := LoadBcask(tempDir, dbName)
+		defer b2.Close()
+		_, err := b2.Get(key)
+		if err == nil {
+			t.Errorf("Expected error for deleted key after reload, got nil")
+		}
+	})
+}
