@@ -39,6 +39,8 @@ type DB interface {
 
 	// Close closes the datastore.
 	Close() error
+
+	AddNewSegment() error
 }
 
 type Bcask struct {
@@ -101,10 +103,10 @@ func (b *Bcask) Put(key, value string) error {
 	return err // Placeholder return
 }
 
-func (b *Bcask) AddNewSegment() {
+func (b *Bcask) AddNewSegment() error {
 	fmt.Println("Adding a new segment: ", len(b.DBSegments))
 	b.DBSegments = append(b.DBSegments, segment.NewFileSegment(b.Path, int64(len(b.DBSegments)), 0))
-
+	return nil
 }
 
 func (b *Bcask) Delete(key string) error {
