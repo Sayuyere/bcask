@@ -229,7 +229,7 @@ func TestBcaskIndexSerialization(t *testing.T) {
 			t.Fatalf("Error closing Bcask: %v", err)
 		}
 
-		indexFilePath := filepath.Join(tempDir, consts.IndexFileName)
+		indexFilePath := filepath.Join(b.Path, consts.IndexFileName)
 		if _, err := os.Stat(indexFilePath); err != nil {
 			t.Errorf("Index file does not exist at %s: %v", indexFilePath, err)
 		}
